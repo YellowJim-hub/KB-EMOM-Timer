@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kettlebell Timer & Logger</title>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --text-color: #ffffff;
+            --accent-color: #00e676; 
+            --warmup-color: #ff9800; 
+            --danger-color: #ff5252; 
+            --adjustment-color: #3498db; 
+            --finish-color: #9b59b6; 
+            --abort-color: #ff5252; 
+            --card-bg: #1e1e1e;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            background-color: var(--card-bg);
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+        }
+
+        h1 { margin-top: 0; font-size: 1.5rem; color: var(--accent-color); }
+
+        .input-group { margin-bottom: 20px; text-align: left; }
+        label { display: block; margin-bottom: 5px; font-size: 0.9rem; color: #aaa; }
+        .row { display: flex; gap: 10px; }
+        .col { flex: 1; }
+
+        input[type="number"], input[type="text"], select, textarea {
+            width: 100%;
+            padding: 10px;
+            background: #333;
+            border: 1px solid #444;
+            color: white;
+            border-radius: 5px;
+            font-size: 1.1rem;
+            box-sizing: border-box;
+        }
+        
+        textarea {
+            resize: none;
+            height: 250px; 
+            font-family: monospace;
+            font-size: 0.9rem;
+        }
+
+        #timer-display { display: none; }
+        #log-display { display: none; margin-top: 20px;}
+
+        .big-time {
+            font-size: 5rem;
+            font-weight: bold;
+            font-variant-numeric: tabular-nums;
+            line-height: 1;
+            margin: 20px 0;
+            transition: color 0.1s;
+        }
+
+        .status {
+            font-size: 1.5rem;
+            color: var(--accent-color);
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+        
+        #current-interval-length {
+            font-size: 0.9rem;
+            color: #ccc;
+            margin-top: -15px;
+            margin-bottom: 10px;
+        }
+
+        .details {
+            font-size: 1rem;
+            color: #888;
+            margin-bottom: 20px;
+        }
+
+        button {
+            border: none;
+            padding: 15px 30px;
+            border-radius: 50px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            cursor: pointer;
+            width: 100%;
+            transition: transform 0.1s;
+        }
+        button:active { transform: scale(0.98); }
+
+        .btn-start { background-color: var(--accent-color); color: #000; }
+        .btn-reset { background-color: var(--abort-color); color: white; margin-top: 10px;}
+        .btn-finish { background-color: var(--finish-color); color: white; margin-top: 10px;}
+        .btn-new-setup { background-color: #444; color: white; margin-top: 10px;}
+
+        .adjustment-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .btn-adjust {
+            background-color: var(--adjustment-color);
+            color: white;
+            padding: 10px 15px;
+            font-size: 1rem;
+            flex: 1;
+            border-radius: 8px;
+        }
+        
+        .dynamic-adjust-row {
+            margin-top: 15px;
+            padding-top: 10px;
+            border-top: 1px solid #444;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div id="setup-screen">
+            <h1>Workout Setup</h1>
+            
+            <div class="input-group">
+                <label for="complex-name">Complex Name (e.g., ABC, S&S)</label>
+                <input type="text" id="complex-name" value="ABC">
+            </div>
+
+            <div class="input-group">
+                <label for="kb-type">Kettlebell Type</label>
+                <select id="kb-type" onchange="toggleWeightInputs()">
+                    <option value="single">Single Kettlebell</option>
+                    <option value="double">Double Kettlebell (Matched)</option>
+                    <option value="mismatched">Double Kettlebell (Mismatched)</option>
+                </select>
+            </div>
+
+            <div class="input-group" id="group-kb-weight">
+                <label>Weight (kg)</label>
+                <div class="row">
+                    <div class="col">
+                        <input type="number" id="weight-kb1" value="16">
+                    </div>
+                    <div class="col" id="col-kb2" style="display:none;">
+                        <input type="number" id="weight-kb2" value="20">
+                    </div>
+                </div>
+            </div>
+            
+            <hr style="border-color:#333; margin: 20px 0;">
+
+            <div class="input-group">
+                <label>Every (Interval Duration)</label>
+                <div class="row">
+                    <div class="col">
+                        <input type="number" id="interval-min" value="1">
+                    </div>
+                    <div class="col">
+                        <input type="number" id="interval-sec" value="15">
+                    </div>
+                </div>
+            </div>
+
+            <div class="input-group">
+                <label>Warmup (Seconds)</label>
+                <input type="number" id="warmup-sec" value="10">
+            </div>
+
+            <div class="input-group">
+                <label>End Condition</label>
+                <select id="mode-select" onchange="toggleModeInputs()">
+                    <option value="total-time">Total Workout Time</option>
+                    <option value="interval-count">Number of Intervals</option>
+                </select>
+            </div>
+
+            <div class="input-group" id="group-total-time">
+                <label>Total Duration (Minutes)</label>
+                <input type="number" id="total-duration-min" value="30">
+            </div>
+
+            <div class="input-group" id="group-interval-count" style="display:none;">
+                <label>Number of Rounds</label>
+                <input type="number" id="total-rounds" value="20">
+            </div>
+
+            <button class="btn-start" onclick="startTimer()">Start Workout</button>
+        </div>
+
+        <div id="timer-display">
+            <div class="status" id="round-display">Round 1</div>
+            <div id="current-interval-length">Current Interval: 01:15</div>
+            <div class="big-time" id="countdown">00:00</div>
+            <div class="details" id="total-time-elapsed">Elapsed: 00:00</div>
+            
+            <div class="adjustment-row">
+                <button class="btn-adjust" onclick="increaseIntervalTime(-5)">-5s Interval</button>
+                <button class="btn-adjust" onclick="increaseIntervalTime(5)">+5s Interval</button>
+            </div>
+
+            <div id="dynamic-adjustments" class="dynamic-adjust-row"></div>
+            
+            <button class="btn-start" id="btn-pause" onclick="togglePause()">Pause</button>
+            <button class="btn-finish" onclick="finishWorkout(true)">Finish Workout</button>
+            <button class="btn-reset" onclick="resetTimer()">Stop & Reset</button>
+        </div>
+        
+        <div id="log-display">
+            <h2>Workout Summary</h2>
+            <textarea id="workout-log" readonly></textarea>
+            <button class="btn-start" onclick="copyLog()">Copy Log Text</button>
+            <button class="btn-new-setup" onclick="resetApp()">New Workout Setup</button>
+        </div>
+    </div>
+
+    <script>
+        // --- Core Variables ---
+        let intervalTimeSec = 0, initialIntervalTimeSec = 0, warmupTimeSec = 0;
+        let totalRounds = 0, currentRound = 1, totalWorkoutDurationSec = 0;
+        let timeLeft = 0, totalTimeElapsed = 0, totalTimeRemaining = 0;
+        let timerInterval = null, isPaused = false, isWarmup = false;
+        let audioCtx = null, synth = window.speechSynthesis, wakeLock = null;
+        let workoutStartTime = null, initialSetup = {}, intervalLog = [];
+
+        // --- Wake Lock Logic (The HTTPS Advantage) ---
+        async function requestWakeLock() {
+            try {
+                if ('wakeLock' in navigator) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                }
+            } catch (err) { console.log("Wake Lock Failed:", err.message); }
+        }
+
+        async function releaseWakeLock() {
+            if (wakeLock) { await wakeLock.release(); wakeLock = null; }
+        }
+
+        // --- UI Logic ---
+        function toggleModeInputs() {
+            const mode = document.getElementById('mode-select').value;
+            document.getElementById('group-total-time').style.display = mode === 'total-time' ? 'block' : 'none';
+            document.getElementById('group-interval-count').style.display = mode === 'interval-count' ? 'block' : 'none';
+        }
+        
+        function toggleWeightInputs() {
+            const type = document.getElementById('kb-type').value;
+            document.getElementById('col-kb2').style.display = type === 'mismatched' ? 'block' : 'none';
+        }
+
+        // --- Utilities ---
+        function formatTime(s) {
+            return `${Math.floor(s/60).toString().padStart(2,'0')}:${(s%60).toString().padStart(2,'0')}`;
+        }
+
+        function speak(text) {
+            if (!synth) return;
+            synth.cancel();
+            synth.speak(new SpeechSynthesisUtterance(text));
+        }
+
+        function playBeep(type) {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.frequency.value = type === 'high' ? 880 : 440;
+            osc.type = type === 'high' ? 'square' : 'sine';
+            osc.start();
+            gain.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 0.3);
+            osc.stop(audioCtx.currentTime + 0.3);
+        }
+
+        // --- Logic ---
+        function recalculateRounds() {
+            if (initialSetup.mode === 'total-time') {
+                totalRounds = Math.floor(totalWorkoutDurationSec / intervalTimeSec);
+                if (currentRound > totalRounds) { finishWorkout(false); return false; }
+            } else if (currentRound > totalRounds) {
+                finishWorkout(false); return false;
+            }
+            updateDisplay();
+            return true;
+        }
+
+        function increaseIntervalTime(sec) {
+            if (isPaused || isWarmup) return;
+            const newVal = Math.max(10, intervalTimeSec + sec);
+            if (newVal === intervalTimeSec) return;
+            if (intervalLog.length > 0) intervalLog[intervalLog.length-1].roundsEnd = currentRound - 1;
+            intervalLog.push({ roundsStart: currentRound, duration: newVal, roundsEnd: totalRounds });
+            intervalTimeSec = newVal;
+            timeLeft = Math.min(intervalTimeSec, Math.max(1, timeLeft + sec));
+            if (recalculateRounds()) speak(`${Math.abs(sec)}s ${sec > 0 ? 'added' : 'removed'}.`);
+        }
+
+        function adjustTotalRounds(r) {
+            totalRounds = Math.max(1, totalRounds + r);
+            if (intervalLog.length > 0) intervalLog[intervalLog.length-1].roundsEnd = totalRounds;
+            recalculateRounds();
+        }
+
+        function adjustTotalTime(m) {
+            totalWorkoutDurationSec = Math.max(intervalTimeSec, totalWorkoutDurationSec + (m * 60));
+            recalculateRounds();
+        }
+
+        function startTimer() {
+            const m = parseInt(document.getElementById('interval-min').value) || 0;
+            const s = parseInt(document.getElementById('interval-sec').value) || 0;
+            initialIntervalTimeSec = (m * 60) + s;
+            intervalTimeSec = initialIntervalTimeSec;
+            warmupTimeSec = parseInt(document.getElementById('warmup-sec').value) || 0;
+            if (initialIntervalTimeSec <= 0) return alert("Set interval.");
+
+            initialSetup = {
+                name: document.getElementById('complex-name').value,
+                kbType: document.getElementById('kb-type').value,
+                kb1: document.getElementById('weight-kb1').value,
+                kb2: document.getElementById('weight-kb2').value,
+                mode: document.getElementById('mode-select').value
+            };
+
+            if (initialSetup.mode === 'total-time') {
+                totalWorkoutDurationSec = (parseInt(document.getElementById('total-duration-min').value) || 0) * 60;
+                totalRounds = Math.floor(totalWorkoutDurationSec / intervalTimeSec);
+            } else {
+                totalRounds = parseInt(document.getElementById('total-rounds').value) || 0;
+            }
+
+            currentRound = 1; totalTimeElapsed = 0; workoutStartTime = new Date();
+            intervalLog = [{ roundsStart: 1, duration: initialIntervalTimeSec, roundsEnd: totalRounds }];
+            
+            isWarmup = warmupTimeSec > 0;
+            timeLeft = isWarmup ? warmupTimeSec : intervalTimeSec;
+            if (isWarmup) speak(`Starting in ${warmupTimeSec} seconds`); else playBeep('high');
+
+            document.getElementById('setup-screen').style.display = 'none';
+            document.getElementById('timer-display').style.display = 'block';
+            
+            const dyn = document.getElementById('dynamic-adjustments');
+            if (initialSetup.mode === 'interval-count') {
+                dyn.innerHTML = `<div class="adjustment-row"><button class="btn-adjust" onclick="adjustTotalRounds(-1)">-1 Round</button><button class="btn-adjust" onclick="adjustTotalRounds(1)">+1 Round</button></div>`;
+            } else {
+                dyn.innerHTML = `<div class="adjustment-row"><button class="btn-adjust" onclick="adjustTotalTime(-1)">-1 Min Total</button><button class="btn-adjust" onclick="adjustTotalTime(1)">+1 Min Total</button></div>`;
+            }
+
+            requestWakeLock();
+            timerInterval = setInterval(tick, 1000);
+            updateDisplay();
+        }
+
+        function tick() {
+            if (isPaused) return;
+            timeLeft--;
+            if (!isWarmup) {
+                totalTimeElapsed++;
+                if (initialSetup.mode === 'total-time') {
+                    totalTimeRemaining = totalWorkoutDurationSec - totalTimeElapsed;
+                    if (totalTimeRemaining <= 0) { finishWorkout(false); return; }
+                }
+                if (timeLeft === Math.floor(intervalTimeSec / 2) && intervalTimeSec >= 10) speak('Half way');
+                if (timeLeft === 10) speak('10 seconds');
+            }
+            if (timeLeft > 0 && timeLeft <= 3) playBeep('low');
+            if (timeLeft < 0) {
+                if (isWarmup) { isWarmup = false; timeLeft = intervalTimeSec; playBeep('high'); }
+                else {
+                    if (initialSetup.mode === 'interval-count' && currentRound >= totalRounds) { finishWorkout(false); return; }
+                    currentRound++; timeLeft = intervalTimeSec; playBeep('high');
+                }
+            }
+            updateDisplay();
+        }
+
+        function updateDisplay() {
+            document.getElementById('countdown').textContent = formatTime(timeLeft);
+            document.getElementById('current-interval-length').textContent = `Current Interval: ${formatTime(intervalTimeSec)}`;
+            document.getElementById('round-display').textContent = isWarmup ? "WARMUP" : `Round ${currentRound} / ${totalRounds}`;
+            document.getElementById('total-time-elapsed').textContent = `Elapsed: ${formatTime(totalTimeElapsed)}`;
+        }
+
+        function togglePause() {
+            isPaused = !isPaused;
+            document.getElementById('btn-pause').textContent = isPaused ? "Resume" : "Pause";
+        }
+
+        function finishWorkout(manual) {
+            clearInterval(timerInterval); releaseWakeLock();
+            if (intervalLog.length > 0) intervalLog[intervalLog.length-1].roundsEnd = Math.max(0, currentRound - 1 + (isWarmup ? 0 : 1));
+            
+            let logText = `--- WORKOUT LOG ---\nComplex: ${initialSetup.name}\nRounds: ${intervalLog[intervalLog.length-1].roundsEnd} / ${totalRounds}\n`;
+            intervalLog.forEach(s => logText += `- Rounds ${s.roundsStart}-${s.roundsEnd}: ${formatTime(s.duration)}\n`);
+            logText += `Total Time: ${formatTime(totalTimeElapsed)}\nStatus: ${manual ? "STOPPED" : "DONE"}`;
+            
+            document.getElementById('workout-log').value = logText;
+            document.getElementById('timer-display').style.display = 'none';
+            document.getElementById('log-display').style.display = 'block';
+            speak('Workout Complete');
+        }
+
+        function resetTimer() { clearInterval(timerInterval); releaseWakeLock(); resetApp(); }
+        function resetApp() { document.getElementById('log-display').style.display = 'none'; document.getElementById('timer-display').style.display = 'none'; document.getElementById('setup-screen').style.display = 'block'; }
+        function copyLog() { document.getElementById('workout-log').select(); document.execCommand('copy'); alert('Copied'); }
+    </script>
+</body>
+</html>
